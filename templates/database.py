@@ -15,11 +15,28 @@ master_user_password = template.add_parameter(
     )
 )
 
+db_access_source_security_group = template.add_resource(
+    ec2.SecurityGroup(
+        'DatabaseAccessSecurityGroup',
+        GroupDescription='DB access source security group',
+        VpcId=ImportValue('TechChallengeVpc')
+    )
+)
+
 db_security_group = template.add_resource(
     ec2.SecurityGroup(
-        'ApplicationDatabaseSecurityGroup',
-        GroupDescription='DB access for application',
-        VpcId=ImportValue('TechChallengeVpc')
+        'DatabaseSecurityGroup',
+        GroupDescription='DB access',
+        VpcId=ImportValue('TechChallengeVpc'),
+        SecurityGroupIngress=[
+            ec2.SecurityGroupRule(
+                SourceSecurityGroupId=Ref(db_access_source_security_group),
+                IpProtocol='tcp',
+                FromPort=5432,
+                ToPort=5432
+            )
+        ]
+
     )
 )
 
@@ -70,5 +87,14 @@ template.add_output(
         Description='DatabaseSecurityGroupAccess',
         Value=Ref(db_security_group),
         Export=Export('DatabaseSecurityGroupAccess')
+    )
+)
+
+template.add_output(
+    Output(
+        'DatabaseAccess',
+        Description='DatabaseAccess',
+        Value=Ref(db_access_source_security_group),
+        Export=Export('DatabaseAccess')
     )
 )

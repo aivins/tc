@@ -8,7 +8,9 @@ import sys
 import argparse
 import boto3
 import templates
+import logging
 
+# boto3.set_stream_logger('', logging.DEBUG)
 
 def get_args():
     parser = argparse.ArgumentParser(description='Apply CFN templates')

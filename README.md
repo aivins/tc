@@ -2,7 +2,8 @@
 
 ## CloudFormation templates/stacks
 
-CloudFormation templates are authored using Troposphere, which in turn generates the YAML which is sent to CloudFormation.
+CloudFormation templates are authored using Troposphere, which in turn generates the YAML which is sent to CloudFormation. Troposphere templates are able to be
+read intuitively by anybody who is familiar with Cloudformation YAML/JSON.
 
 * Pipeline - sets up CI/CD
 * Network - establish a fresh VPC with private and public subnets in 2 AZs
@@ -14,6 +15,8 @@ CloudFormation templates are authored using Troposphere, which in turn generates
 * python3
 * Configured awscli/boto3 environment to an account with full AWS admin access
 * SSM Parameter `master_user_password` with the value of your chosen master password for RDS
+
+Satisfy python requirements with (optionally in a virtualenv):
 
 ```
 pip3 install -r requirements.txt

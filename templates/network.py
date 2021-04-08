@@ -19,6 +19,37 @@ vpc = template.add_resource(
     )
 )
 
+igw = template.add_resource(
+    ec2.InternetGateway(
+        'InternetGateway'
+    )
+)
+
+vpc_igw = template.add_resource(
+    ec2.VPCGatewayAttachment(
+        'VpcInternetGateway',
+        InternetGatewayId=Ref(igw),
+        VpcId=Ref(vpc),
+    )
+)
+
+public_route_table = template.add_resource(
+    ec2.RouteTable(
+        'PublicRouteTable',
+        VpcId=Ref(vpc)
+    )
+)
+
+default_route = template.add_resource(
+    ec2.Route(
+        'PublicDefaultRoute',
+        RouteTableId=Ref(public_route_table),
+        DestinationCidrBlock='0.0.0.0/0',
+        GatewayId=Ref(igw)
+    )
+)
+
+
 # Public subnets across 2 AZ to host application
 public_subnet_a = template.add_resource(
     ec2.Subnet(
@@ -37,6 +68,22 @@ public_subnet_b = template.add_resource(
         AvailabilityZone=AZ_2,
         CidrBlock='10.0.1.0/24',
         Tags=[Tag('Name', 'PublicSubnetB')]
+    )
+)
+
+public_subnet_route_table_assoc_a = template.add_resource(
+    ec2.SubnetRouteTableAssociation(
+        'PublicSubnetRouteTableAssocA',
+        RouteTableId=Ref(public_route_table),
+        SubnetId=Ref(public_subnet_a)
+    )
+)
+
+public_subnet_route_table_assoc_b = template.add_resource(
+    ec2.SubnetRouteTableAssociation(
+        'PublicSubnetRouteTableAssocB',
+        RouteTableId=Ref(public_route_table),
+        SubnetId=Ref(public_subnet_b)
     )
 )
 

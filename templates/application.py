@@ -1,6 +1,8 @@
+import os
 from troposphere import (
-    Template, Tag, Parameter, Ref, ImportValue, iam, ec2
+    Template, Tag, Parameter, Ref, ImportValue, Sub, Base64, iam, ec2
 )
+from troposphere import elasticloadbalancingv2 as elb
 from .constants import *
 
 from awacs.aws import (
@@ -12,7 +14,17 @@ from awacs.aws import (
 )
 import awacs.sts
 
+
+fh = open(os.path.join(os.path.dirname(__file__), '..', 'files', 'init.sh'), 'r')
+init_script = fh.read()
+fh.close()
+
+
 template = Template('Tech Challenge Application')
+
+vpc_id = ImportValue('TechChallengeVpc')
+public_subnet_a = ImportValue('PublicSubnetA')
+public_subnet_b = ImportValue('PublicSubnetB')
 
 
 key_name = template.add_parameter(
@@ -30,7 +42,7 @@ instance_sg = template.add_resource(
         'ApplicationInstanceSecurityGroup',
         GroupName='ApplicationInstanceSecurityGroup',
         GroupDescription='ApplicationInstanceSecurityGroup',
-        VpcId=ImportValue('TechChallengeVpc'),
+        VpcId=vpc_id,
         SecurityGroupIngress=[
             ec2.SecurityGroupRule(
                 CidrIp='0.0.0.0/0',
@@ -78,11 +90,77 @@ instance = template.add_resource(
         IamInstanceProfile=Ref(profile),
         InstanceType='t3.small',
         KeyName=Ref(key_name),
-        SecurityGroupIds=[
-            Ref(instance_sg),
-            ImportValue('DatabaseSecurityGroupAccess')
+        NetworkInterfaces=[
+            ec2.NetworkInterfaceProperty(
+                AssociatePublicIpAddress=True,
+                DeviceIndex=0,
+                GroupSet=[
+                    Ref(instance_sg),
+                    ImportValue('DatabaseAccess')
+                ],
+                SubnetId=public_subnet_a
+            )
         ],
-        SubnetId=ImportValue('PublicSubnetA'),
+        UserData=Base64(
+            Sub(
+                init_script,
+                DatabaseEndpoint=ImportValue('DatabaseEndpoint')
+            )
+        ),
         Tags=[Tag('Name', 'ApplicationInstance')]
+    )
+)
+
+load_balancer_sg = template.add_resource(
+    ec2.SecurityGroup(
+        'LoadBalancerSecurityGroup',
+        GroupDescription='Permit port 80',
+        VpcId=vpc_id,
+        SecurityGroupIngress=[
+            ec2.SecurityGroupRule(
+                IpProtocol="tcp",
+                FromPort="80",
+                ToPort="80",
+                CidrIp="0.0.0.0/0"
+            )
+        ]
+    )
+)
+
+load_balancer = template.add_resource(
+    elb.LoadBalancer(
+        'LoadBalancer',
+        Type='application',
+        Scheme='internet-facing',
+        Subnets=[public_subnet_a, public_subnet_b],
+        SecurityGroups=[Ref(load_balancer_sg)]
+    )
+)
+
+target_group = template.add_resource(
+    elb.TargetGroup(
+        'TargetGroup',
+        VpcId=vpc_id,
+        Port=3000,
+        Protocol='HTTP',
+        TargetType='instance',
+        HealthCheckEnabled=True,
+        HealthCheckPath='/healthcheck/'
+    )
+)
+
+
+listener = template.add_resource(
+    elb.Listener(
+        'HttpListener',
+        LoadBalancerArn=Ref(load_balancer),
+        Port=80,
+        Protocol='HTTP',
+        DefaultActions=[
+            elb.Action(
+                Type='forward',
+                TargetGroupArn=Ref(target_group)
+            )
+        ]
     )
 )
