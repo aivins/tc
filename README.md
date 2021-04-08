@@ -12,6 +12,8 @@ CloudFormation templates are authored using Troposphere, which in turn generates
 ## Prerequisites
 
 * python3
+* Configured awscli/boto3 environment to an account with full AWS admin access
+* SSM Parameter `master_user_password` with the value of your chosen master password for RDS
 
 ```
 pip3 install -r requirements.txt

@@ -1,6 +1,10 @@
-from troposphere import Template, ec2
+from troposphere import Template, Ref, ec2
 
 template = Template('Tech Challenge CI/CD pipeline')
+
+
+
+
 
 vpc = template.add_resource(
     ec2.VPC(
@@ -11,3 +15,6 @@ vpc = template.add_resource(
         InstanceTenancy='default'
     )
 )
+
+
+

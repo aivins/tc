@@ -12,8 +12,8 @@ import templates
 
 def get_args():
     parser = argparse.ArgumentParser(description='Apply CFN templates')
-    parser.add_argument('template', type=str,
-                        help='an integer for the accumulator')
+    parser.add_argument('template', type=str, help='template name')
+    parser.add_argument('--print', action='store_true', default=False, help='print template YAML')
     args = parser.parse_args()
     return args
 
@@ -28,24 +28,24 @@ def deploy_template(template_name, template):
             StackName=template_name
         )
     except cfn.exceptions.ClientError as e:
-        if 'stack with id network does not exist' in str(e).lower():
+        if f'stack with id {template_name} does not exist' in str(e).lower():
             create = True
 
+    create_update_params = dict(
+        StackName=template_name,
+        TemplateBody=template_body,
+        Capabilities=['CAPABILITY_IAM']
+    )
+
     if create:
-        print('Creating stack {template_name}...')
-        cfn.create_stack(
-            StackName=template_name,
-            TemplateBody=template_body,
-        )
+        print(f'Creating stack {template_name}...')
+        cfn.create_stack(**create_update_params)
         waiter = cfn.get_waiter('stack_create_complete')
 
     else:
-        print('Updating stack {template_name}...')
+        print(f'Updating stack {template_name}...')
         try:
-            cfn.update_stack(
-                StackName=template_name,
-                TemplateBody=template_body,
-            )
+            cfn.update_stack(**create_update_params)
         except cfn.exceptions.ClientError as e:
             if 'no updates are to be performed' in str(e).lower():
                 print('No updates are required!')
@@ -56,8 +56,10 @@ def deploy_template(template_name, template):
     print('Waiting for stack', 'creation...' if create else 'update...')
     waiter.wait(
         StackName=template_name,
-        Delay=30,
-        MaxAttempts=20
+        WaiterConfig=dict(
+            Delay=30,
+            MaxAttempts=30
+        )
     )
     print(f'Stack {template_name} successfully',
           'created!' if create else 'updated!')
@@ -72,7 +74,10 @@ def main():
         print(f'Template {args.template} not known')
         sys.exit(1)
 
-    deploy_template(args.template, template)
+    if args.print:
+        print(template.to_yaml())
+    else:
+        deploy_template(args.template, template)
 
 
 if __name__ == '__main__':
