@@ -14,7 +14,7 @@ unzip -d /opt/techchallenge TechChallengeApp_v.0.8.0_linux64.zip
 # Create config file
 cat <<EOF > /opt/techchallenge/dist/conf.toml
 "DbUser" = "application"
-"DbPassword" = "${!DB_PASS}"
+"DbPassword" = ${!DB_PASS}
 "DbName" = "application"
 "DbPort" = "5432"
 "DbHost" = "${DatabaseEndpoint}"
@@ -46,7 +46,8 @@ EOF
 # Update the database
 # Looks like this destroys existing data, which isn't what we'd want on
 # every new instance
-/opt/techchallenge/dist/TechChallengeApp updatedb -s
+cd /opt/techchallenge/dist
+./TechChallengeApp updatedb -s
 
 # Start serving now and after reboot
 systemctl daemon-reload

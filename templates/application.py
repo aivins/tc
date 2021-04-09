@@ -1,6 +1,8 @@
 import os
 from troposphere import (
-    Template, Tag, Parameter, Ref, ImportValue, Sub, Base64, iam, ec2
+    Template, Tag, Parameter, Ref,
+    ImportValue, Sub, Base64, GetAtt,
+    iam, ec2, autoscaling
 )
 from troposphere import elasticloadbalancingv2 as elb
 from .constants import *
@@ -15,7 +17,8 @@ from awacs.aws import (
 import awacs.sts
 
 
-fh = open(os.path.join(os.path.dirname(__file__), '..', 'files', 'init.sh'), 'r')
+fh = open(os.path.join(os.path.dirname(
+    __file__), '..', 'files', 'init.sh'), 'r')
 init_script = fh.read()
 fh.close()
 
@@ -33,81 +36,6 @@ key_name = template.add_parameter(
         Type='String',
         Default='default',
         Description='Keypair to use for application instance'
-    )
-)
-
-
-instance_sg = template.add_resource(
-    ec2.SecurityGroup(
-        'ApplicationInstanceSecurityGroup',
-        GroupName='ApplicationInstanceSecurityGroup',
-        GroupDescription='ApplicationInstanceSecurityGroup',
-        VpcId=vpc_id,
-        SecurityGroupIngress=[
-            ec2.SecurityGroupRule(
-                CidrIp='0.0.0.0/0',
-                IpProtocol='tcp',
-                FromPort=80,
-                ToPort=80
-            )
-        ]
-    )
-)
-
-role = template.add_resource(
-    iam.Role(
-        'ApplicationInstanceRole',
-        Description='Application Instance Role granting SSM management access',
-        AssumeRolePolicyDocument=PolicyDocument(
-            Statement=[
-                    Statement(
-                        Effect=Allow,
-                        Action=[awacs.sts.AssumeRole],
-                        Principal=Principal("Service", ["ec2.amazonaws.com"])
-                    )
-            ]
-        ),
-        Path='/',
-        ManagedPolicyArns=[
-            'arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore'
-        ],
-    )
-)
-
-profile = template.add_resource(
-    iam.InstanceProfile(
-        'InstanceProfile',
-        Path='/',
-        Roles=[Ref(role)]
-    )
-)
-
-instance = template.add_resource(
-    ec2.Instance(
-        'ApplicationInstance',
-        AvailabilityZone=AZ_1,
-        ImageId=AMI_ID,
-        IamInstanceProfile=Ref(profile),
-        InstanceType='t3.small',
-        KeyName=Ref(key_name),
-        NetworkInterfaces=[
-            ec2.NetworkInterfaceProperty(
-                AssociatePublicIpAddress=True,
-                DeviceIndex=0,
-                GroupSet=[
-                    Ref(instance_sg),
-                    ImportValue('DatabaseAccess')
-                ],
-                SubnetId=public_subnet_a
-            )
-        ],
-        UserData=Base64(
-            Sub(
-                init_script,
-                DatabaseEndpoint=ImportValue('DatabaseEndpoint')
-            )
-        ),
-        Tags=[Tag('Name', 'ApplicationInstance')]
     )
 )
 
@@ -161,6 +89,88 @@ listener = template.add_resource(
                 Type='forward',
                 TargetGroupArn=Ref(target_group)
             )
+        ]
+    )
+)
+
+
+instance_sg = template.add_resource(
+    ec2.SecurityGroup(
+        'ApplicationInstanceSecurityGroup',
+        GroupDescription='ApplicationInstanceSecurityGroup',
+        VpcId=vpc_id,
+        SecurityGroupIngress=[
+            ec2.SecurityGroupRule(
+                SourceSecurityGroupId=Ref(load_balancer_sg),
+                IpProtocol='tcp',
+                FromPort=3000,
+                ToPort=3000
+            )        ]
+    )
+)
+
+role = template.add_resource(
+    iam.Role(
+        'ApplicationInstanceRole',
+        Description='Application Instance Role granting SSM management access',
+        AssumeRolePolicyDocument=PolicyDocument(
+            Statement=[
+                Statement(
+                    Effect=Allow,
+                    Action=[awacs.sts.AssumeRole],
+                    Principal=Principal("Service", ["ec2.amazonaws.com"])
+                )
+            ]
+        ),
+        Path='/',
+        ManagedPolicyArns=[
+            'arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore'
+        ],
+    )
+)
+
+profile = template.add_resource(
+    iam.InstanceProfile(
+        'InstanceProfile',
+        Path='/',
+        Roles=[Ref(role)]
+    )
+)
+
+
+launch_config = template.add_resource(
+    autoscaling.LaunchConfiguration(
+        'ApplicationLaunchConfiguration',
+        ImageId=AMI_ID,
+        IamInstanceProfile=Ref(profile),
+        InstanceType='t3.small',
+        KeyName=Ref(key_name),
+        AssociatePublicIpAddress=True,
+        SecurityGroups=[
+            Ref(instance_sg),
+            ImportValue('DatabaseAccess')
+        ],
+        UserData=Base64(
+            Sub(
+                init_script,
+                DatabaseEndpoint=ImportValue('DatabaseEndpoint')
+            )
+        ),
+    )
+)
+
+asg = template.add_resource(
+    autoscaling.AutoScalingGroup(
+        'AutoScalingGroup',
+        AvailabilityZones=[AZ_1, AZ_2],
+        MinSize=1,
+        MaxSize=2,
+        DesiredCapacity=1,
+        TargetGroupARNs=[Ref(target_group)],
+        LaunchConfigurationName=Ref(launch_config),
+        VPCZoneIdentifier=[
+            ImportValue('PublicSubnetA'),
+            ImportValue('PublicSubnetB')
         ]
     )
 )

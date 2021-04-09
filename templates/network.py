@@ -57,6 +57,7 @@ public_subnet_a = template.add_resource(
         VpcId=Ref(vpc),
         AvailabilityZone=AZ_1,
         CidrBlock='10.0.0.0/24',
+        MapPublicIpOnLaunch=True,
         Tags=[Tag('Name', 'PublicSubnetA')]
     )
 )
@@ -67,6 +68,7 @@ public_subnet_b = template.add_resource(
         VpcId=Ref(vpc),
         AvailabilityZone=AZ_2,
         CidrBlock='10.0.1.0/24',
+        MapPublicIpOnLaunch=True,
         Tags=[Tag('Name', 'PublicSubnetB')]
     )
 )
